@@ -365,3 +365,75 @@ def test_client_error_msg_scrubs_token(
     with pytest.raises(MineruInputError) as exc:
         client.submit(SubmitParams(file_name="x.pdf", data_id="d"))
     assert _TOKEN not in str(exc.value)
+
+
+def test_client_submit_validates_file_urls_shape(
+    httpx_mock: HTTPXMock, client: MineruClient
+) -> None:
+    """A string-typed ``file_urls`` would let ``urls[0]`` index a
+    single character; reject the shape outright instead.
+    """
+    httpx_mock.add_response(
+        url=_BATCH_URL,
+        method="POST",
+        json={"code": 0, "data": {"batch_id": "B", "file_urls": "oops"}},
+    )
+    with pytest.raises(MineruApiError, match="file_urls"):
+        client.submit(SubmitParams(file_name="x.pdf", data_id="d"))
+
+
+def test_client_poll_state_non_string_raises(
+    httpx_mock: HTTPXMock, client: MineruClient
+) -> None:
+    """A poll response with a non-string ``state`` field is a contract
+    violation — failing now beats waiting out the 10-min timeout.
+    """
+    httpx_mock.add_response(
+        url=_BATCH_RESULTS,
+        method="GET",
+        json={
+            "code": 0,
+            "data": {"extract_result": [{"state": {"running": True}}]},
+        },
+    )
+    with pytest.raises(MineruApiError, match="state"):
+        client.poll_until_done("B123")
+
+
+def test_client_raise_for_code_non_string_msg(
+    httpx_mock: HTTPXMock, client: MineruClient
+) -> None:
+    """A non-string ``msg`` (list/dict) must coerce cleanly rather than
+    raising ``TypeError`` and bypassing the typed exception hierarchy.
+    """
+    httpx_mock.add_response(
+        url=_BATCH_URL,
+        method="POST",
+        status_code=400,
+        json={"code": "-60002", "msg": ["array", "of", "errors"]},
+    )
+    with pytest.raises(MineruInputError) as exc:
+        client.submit(SubmitParams(file_name="x.pdf", data_id="d"))
+    assert "errors" in str(exc.value)
+
+
+def test_client_download_zip_size_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The download path streams + caps; an oversize response is
+    refused before being buffered. Cap is monkey-patched low so the
+    test runs with a small fixture payload.
+    """
+    monkeypatch.setattr(
+        "dikw_converter_mineru._client._MAX_ZIP_DOWNLOAD_BYTES", 16
+    )
+    # Run a tiny in-process httpx mock; the streaming path is hard to
+    # exercise via pytest-httpx alone, so we build an explicit MockTransport.
+    big_payload = b"x" * 1024
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=big_payload)
+
+    transport = httpx.MockTransport(handler)
+    with httpx.Client(transport=transport) as http:
+        c = MineruClient(client=http, token=_TOKEN, sleep=lambda _s: None)
+        with pytest.raises(MineruApiError, match="download cap"):
+            c.download_zip("https://cdn.example.com/big.zip")

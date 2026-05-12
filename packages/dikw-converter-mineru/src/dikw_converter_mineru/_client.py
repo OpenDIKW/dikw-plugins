@@ -46,6 +46,13 @@ _POLL_TOTAL_TIMEOUT_S = 600.0
 _RETRY_ATTEMPTS = 3
 _RETRY_INITIAL_BACKOFF_S = 1.0
 
+# Hard cap on the result-ZIP download. Real MinerU result ZIPs are
+# < 100 MB; refuse anything larger before allocating the buffer so a
+# hostile CDN response can't OOM the client. Independent of the
+# uncompressed caps in ``_zip_extract`` (those run AFTER bytes land in
+# memory).
+_MAX_ZIP_DOWNLOAD_BYTES = 256 * 1024 * 1024  # 256 MiB
+
 # MinerU task lifecycle states. The API ever-only returns these.
 _STATE_DONE = "done"
 _STATE_FAILED = "failed"
@@ -152,13 +159,35 @@ class MineruClient:
         body = self._request_json_with_retry(
             "POST", _BATCH_UPLOAD_URLS, json_payload=payload
         )
-        data = body.get("data") or {}
-        batch_id = data.get("batch_id")
-        urls = data.get("file_urls") or []
-        if not batch_id or not urls:
+        data = body.get("data")
+        if not isinstance(data, dict):
             raise MineruApiError(
                 _scrub(
-                    f"MinerU submit response missing batch_id/file_urls: {body!r}",
+                    f"MinerU submit response 'data' is not a dict: {body!r}",
+                    self._token,
+                )
+            )
+        batch_id = data.get("batch_id")
+        urls = data.get("file_urls")
+        # Strict shape: a string ``file_urls`` would silently let
+        # ``urls[0]`` index a character; a non-dict ``data`` would
+        # likewise produce garbage downstream.
+        if not isinstance(batch_id, str) or not batch_id:
+            raise MineruApiError(
+                _scrub(
+                    f"MinerU submit response missing/invalid batch_id: {body!r}",
+                    self._token,
+                )
+            )
+        if (
+            not isinstance(urls, list)
+            or not urls
+            or not isinstance(urls[0], str)
+            or not urls[0]
+        ):
+            raise MineruApiError(
+                _scrub(
+                    f"MinerU submit response file_urls invalid: {body!r}",
                     self._token,
                 )
             )
@@ -228,7 +257,15 @@ class MineruClient:
                         self._token,
                     )
                 )
-            state = first.get("state", "pending") or "pending"
+            raw_state = first.get("state")
+            if raw_state is not None and not isinstance(raw_state, str):
+                raise MineruApiError(
+                    _scrub(
+                        f"MinerU poll state is not a string: {body!r}",
+                        self._token,
+                    )
+                )
+            state = raw_state or "pending"
             last_state = state
 
             if state == _STATE_DONE:
@@ -257,16 +294,32 @@ class MineruClient:
             wait = min(wait * _POLL_BACKOFF_FACTOR, self._poll_max_s)
 
     def download_zip(self, zip_url: str) -> bytes:
-        """GET the result CDN URL. Public CDN — no auth header."""
+        """GET the result CDN URL, capped at :data:`_MAX_ZIP_DOWNLOAD_BYTES`.
+
+        Streams the response and aborts the moment cumulative bytes
+        exceed the cap, so a hostile or misbehaving CDN can't OOM us
+        before the uncompressed-size guards in ``_zip_extract`` run.
+        Public CDN — no auth header.
+        """
+        chunks: list[bytes] = []
+        total = 0
         try:
-            resp = self._client.get(zip_url)
+            with self._client.stream("GET", zip_url) as resp:
+                if resp.status_code >= 400:
+                    raise MineruApiError(
+                        f"MinerU result download failed: HTTP {resp.status_code}"
+                    )
+                for chunk in resp.iter_bytes():
+                    total += len(chunk)
+                    if total > _MAX_ZIP_DOWNLOAD_BYTES:
+                        raise MineruApiError(
+                            f"MinerU result ZIP exceeds {_MAX_ZIP_DOWNLOAD_BYTES} "
+                            f"bytes download cap; refusing to buffer"
+                        )
+                    chunks.append(chunk)
         except httpx.HTTPError as exc:
             raise MineruApiError(f"MinerU result download network error: {exc}") from exc
-        if resp.status_code >= 400:
-            raise MineruApiError(
-                f"MinerU result download failed: HTTP {resp.status_code}"
-            )
-        return resp.content
+        return b"".join(chunks)
 
     # ----- internals -----------------------------------------------------
 
@@ -353,7 +406,7 @@ class MineruClient:
     def _raise_for_code(
         self,
         code: str | int | None,
-        msg: str | None,
+        msg: Any,
         *,
         context: str,
     ) -> None:
@@ -366,7 +419,16 @@ class MineruClient:
         ``"HTTP 401"``) and is trusted.
         """
         scode = "" if code is None else str(code)
-        text = _scrub(msg, self._token) if msg else "(no message)"
+        if not msg:
+            text = "(no message)"
+        elif isinstance(msg, str):
+            text = _scrub(msg, self._token)
+        else:
+            # API contract violation — msg should always be a string,
+            # but a malformed/proxied response can ship a list or dict.
+            # Coerce defensively so we never raise TypeError instead of
+            # the typed plugin error.
+            text = _scrub(repr(msg), self._token)
         exc_cls = _classify_code(scode)
         if exc_cls is MineruAuthError:
             raise exc_cls(

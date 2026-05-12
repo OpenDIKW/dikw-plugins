@@ -200,3 +200,62 @@ def test_zip_extract_oversized_entry_rejected(
     )
     with pytest.raises(MineruApiError, match="per-entry"):
         extract_result_zip(zip_bytes)
+
+
+def test_zip_extract_orphan_images_dropped(
+    build_result_zip: BuildResultZipFn,
+) -> None:
+    """Images the markdown never references must not survive into the
+    asset set — dikw-core's md_inspect rejects orphan assets with
+    known image extensions.
+    """
+    zip_bytes = build_result_zip(
+        markdown="# Doc\n\n![Fig](images/used.png)\n",
+        images={
+            "images/used.png": _IMG_BYTES,
+            "images/orphan.png": _IMG_BYTES,
+            "thumbnails/preview.jpg": _IMG_BYTES,
+        },
+    )
+    md, assets = extract_result_zip(zip_bytes)
+    assert "assets/images/used.png" in assets
+    assert "assets/images/orphan.png" not in assets
+    assert "assets/thumbnails/preview.jpg" not in assets
+    assert "![[assets/images/used.png|Fig]]" in md
+
+
+def test_zip_extract_colon_in_path_rejected(
+    build_result_zip: BuildResultZipFn,
+) -> None:
+    """Windows alternate-data-stream syntax (``fig.png:stream``) is
+    refused; also catches the residual edge of bare-colon names that
+    used to slip past the drive-letter check.
+    """
+    zip_bytes = build_result_zip(
+        markdown="# Doc\n",
+        unsafe_entries=[
+            ("fig.png:stream.png", _IMG_BYTES),
+            ("a/colon:in/middle.png", _IMG_BYTES),
+        ],
+    )
+    _md, assets = extract_result_zip(zip_bytes)
+    for key in assets:
+        assert ":" not in key
+
+
+def test_zip_extract_nested_full_md_ignored(
+    build_result_zip: BuildResultZipFn,
+) -> None:
+    """A ``nested/full.md`` smuggled into the ZIP must not override the
+    real markdown body. The body must live at the ZIP root.
+    """
+    import zipfile
+    from io import BytesIO
+
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("full.md", "real body\n")
+        zf.writestr("nested/full.md", "evil override\n")
+    md, _ = extract_result_zip(buf.getvalue())
+    assert "real body" in md
+    assert "evil override" not in md

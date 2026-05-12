@@ -103,8 +103,11 @@ def _safe_relpath(raw_name: str) -> str | None:
     # against esoteric encodings.
     if any(part == ".." for part in normalized.split("/")):
         return None
-    # Reject Windows absolute paths (``C:/...`` after conversion).
-    if len(normalized) >= 2 and normalized[1] == ":":
+    # Reject ``:`` anywhere in any component — covers Windows absolute
+    # paths (``C:/...``), Windows alternate-data-stream syntax
+    # (``fig.png:stream``), and the colon-prefixed weird names ZIPs
+    # produced by some converters.
+    if any(":" in part for part in normalized.split("/")):
         return None
     return sanitize_asset_name(normalized)
 
@@ -113,9 +116,16 @@ def _image_extension_ok(relpath: str) -> bool:
     return posixpath.splitext(relpath)[1].lower() in _IMAGE_EXTS
 
 
-def _rewrite_md_image_refs(md_text: str, asset_map: dict[str, str]) -> str:
+def _rewrite_md_image_refs(
+    md_text: str, asset_map: dict[str, str]
+) -> tuple[str, set[str]]:
     """Rewrite md image refs to wikilink form when they resolve to an
-    extracted asset. Match priority:
+    extracted asset. Returns the rewritten text plus the set of asset
+    paths (``"assets/<relpath>"``) actually referenced — callers use
+    this to drop orphan assets so dikw-core's md_inspect doesn't reject
+    the import.
+
+    Match priority:
 
     1. Exact normalized relpath (``images/fig.png`` → ``assets/images/fig.png``).
     2. Basename-only fallback, but ONLY when that basename is unique
@@ -131,6 +141,7 @@ def _rewrite_md_image_refs(md_text: str, asset_map: dict[str, str]) -> str:
     for relpath, asset_path in asset_map.items():
         by_relpath[relpath] = asset_path
         by_basename.setdefault(posixpath.basename(relpath), []).append(asset_path)
+    referenced: set[str] = set()
 
     def _sub(m: re.Match[str]) -> str:
         if m.group("path_std") is not None:
@@ -149,14 +160,17 @@ def _rewrite_md_image_refs(md_text: str, asset_map: dict[str, str]) -> str:
 
         cleaned = sanitize_asset_name(raw_path)
         if cleaned in by_relpath:
-            return wikilink(by_relpath[cleaned], alt)
+            asset_path = by_relpath[cleaned]
+            referenced.add(asset_path)
+            return wikilink(asset_path, alt)
         base = posixpath.basename(cleaned)
         candidates = by_basename.get(base, [])
         if len(candidates) == 1:
+            referenced.add(candidates[0])
             return wikilink(candidates[0], alt)
         return m.group(0)
 
-    return _MD_IMAGE_RE.sub(_sub, md_text)
+    return _MD_IMAGE_RE.sub(_sub, md_text), referenced
 
 
 def extract_result_zip(zip_bytes: bytes) -> tuple[str, dict[str, bytes]]:
@@ -204,8 +218,10 @@ def extract_result_zip(zip_bytes: bytes) -> tuple[str, dict[str, bytes]]:
             if relpath is None:
                 continue
 
-            base = posixpath.basename(relpath)
-            if base == _FULL_MD:
+            # ``full.md`` must live at the ZIP root. A ``nested/full.md``
+            # smuggled in by a malicious or buggy upstream would otherwise
+            # override the real body.
+            if relpath == _FULL_MD:
                 md_text = zf.read(info).decode("utf-8", errors="replace")
                 cumulative_bytes += info.file_size
                 continue
@@ -225,7 +241,12 @@ def extract_result_zip(zip_bytes: bytes) -> tuple[str, dict[str, bytes]]:
         )
 
     md_text = md_text.replace("\r\n", "\n").replace("\r", "\n")
-    md_text = _rewrite_md_image_refs(md_text, asset_map)
+    md_text, referenced = _rewrite_md_image_refs(md_text, asset_map)
+    # Drop orphan assets — dikw-core's md_inspect rejects any asset
+    # whose extension is in the default set (png/jpg/etc.) but isn't
+    # image-ref'd from the markdown. MinerU sometimes ships extra
+    # thumbnails or layout-only crops the body never mentions.
+    assets = {k: v for k, v in assets.items() if k in referenced}
     if not md_text.endswith("\n"):
         md_text += "\n"
     return md_text, assets
