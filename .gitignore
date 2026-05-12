@@ -27,6 +27,9 @@ env/
 *.swp
 .DS_Store
 
+# Local agent state (Claude Code, etc.)
+.claude/
+
 # Coverage
 .coverage
 htmlcov/

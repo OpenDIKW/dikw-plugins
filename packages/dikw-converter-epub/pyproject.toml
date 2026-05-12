@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dikw-converter-epub"
+version = "0.1.0"
+description = "Pure-Python EPUB → markdown converter plugin for dikw client import."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "dikw-plugins contributors" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "dikw-core>=0.0.1",
+]
+
+# Register this plugin with dikw client's converter discovery.
+# The key (``epub``) is informational; ``EpubConverter.name`` is what
+# dispatch actually uses.
+[project.entry-points."dikw.client.converters"]
+epub = "dikw_converter_epub:EpubConverter"
+
+[project.urls]
+Repository = "https://github.com/opendikw/dikw-plugins"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dikw_converter_epub"]

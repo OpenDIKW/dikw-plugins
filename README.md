@@ -20,8 +20,8 @@ versioned.
 | Package                     | Engine name | Extensions   | Status        |
 | --------------------------- | ----------- | ------------ | ------------- |
 | `dikw-converter-example`    | `example`   | `.example`   | reference stub — copy as template |
+| `dikw-converter-epub`       | `epub`      | `.epub`      | 0.1.0 — pure-Python EPUB → markdown |
 | _(future)_ `dikw-converter-pdf` | TBD     | `.pdf`       | not yet built |
-| _(future)_ `dikw-converter-epub` | TBD    | `.epub`      | not yet built |
 
 ## Quick install
 

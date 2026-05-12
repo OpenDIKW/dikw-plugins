@@ -42,6 +42,14 @@ Pure-Python via ebooklib + a html → md converter (markdownify,
 html2text) gives you a sub-100MB-dep plugin that handles 95% of EPUBs
 well.
 
+**Already shipped:** [`dikw-converter-epub`](../packages/dikw-converter-epub/)
+v0.1, **stdlib-only** route (no ebooklib / markdownify / lxml deps).
+Architecture and parser logic ported from the author's
+`holo-epub-reader` project. Known limitation: ~5% of edge-case EPUBs
+(non-standard OPF layouts, exotic inline XHTML, books that put body
+content inside `<aside>`) may need a future second engine to handle
+cleanly.
+
 ## Other formats worth considering (not yet covered)
 
 - `.docx` — `python-docx` + custom md emission, or pandoc subprocess.
