@@ -59,9 +59,10 @@ def test_convert_pdf_full_flow(
 
     md = (out / "paper.md").read_text(encoding="utf-8")
     assert "# Paper" in md
-    assert "![[assets/fig1.png|Fig]]" in md
+    # ZIP relpath is preserved under assets/ (no more basename collapse).
+    assert "![[assets/images/fig1.png|Fig]]" in md
     assert "![[assets/paper.pdf|original]]" in md
-    assert (out / "assets" / "fig1.png").read_bytes() == _IMG_BYTES
+    assert (out / "assets" / "images" / "fig1.png").read_bytes() == _IMG_BYTES
     assert (out / "assets" / "paper.pdf").read_bytes() == input_pdf.read_bytes()
 
 
@@ -84,6 +85,7 @@ def test_convert_docx_omits_model_version(
 
     submit_req = httpx_mock.get_requests()[0]
     payload = json.loads(submit_req.read())
+    assert "model_version" not in payload
     assert "model_version" not in payload["files"][0]
 
 
@@ -209,7 +211,7 @@ def test_convert_deterministic_within_cache(
     MineruConverter().convert(input_pdf, out_a)
     MineruConverter().convert(input_pdf, out_b)
 
-    for name in ("doc.md", "assets/i.png", "assets/doc.pdf"):
+    for name in ("doc.md", "assets/images/i.png", "assets/doc.pdf"):
         assert (out_a / name).read_bytes() == (out_b / name).read_bytes(), name
 
 
@@ -268,7 +270,7 @@ def test_convert_pdf_uses_vlm_model_version(
 
     MineruConverter().convert(input_pdf, tmp_path / "out")
     payload = json.loads(httpx_mock.get_requests()[0].read())
-    assert payload["files"][0].get("model_version") == "vlm"
+    assert payload.get("model_version") == "vlm"
 
 
 def test_convert_explicit_api_key_constructor_path(

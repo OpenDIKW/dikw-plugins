@@ -10,23 +10,23 @@ two paths don't diverge.
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from ._zip_extract import sanitize_asset_name, wikilink
 
 
-def write_provenance(
-    file_bytes: bytes, input_name: str, output_dir: Path
-) -> str:
-    """Write ``file_bytes`` to ``output_dir/assets/<safe_name>`` and
-    return the wikilink line to append to the markdown.
+def write_provenance(input_path: Path, output_dir: Path) -> str:
+    """Stream-copy the input into ``output_dir/assets/<safe_name>`` and
+    return the wikilink to append to the markdown.
 
-    Takes bytes (not a Path) because the orchestrator already has the
-    input in memory for hashing + uploading — re-reading 200 MB from
-    disk here would be wasteful.
+    Streaming (``shutil.copyfile``) keeps RAM flat for 200 MB inputs.
+    The sanitized name is computed once and used both for the on-disk
+    filename and the markdown ref so md_inspect's asset graph stays
+    consistent.
     """
-    safe_name = sanitize_asset_name(input_name)
+    safe_name = sanitize_asset_name(input_path.name)
     assets_dir = output_dir / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
-    (assets_dir / safe_name).write_bytes(file_bytes)
+    shutil.copyfile(input_path, assets_dir / safe_name)
     return wikilink(f"assets/{safe_name}", "original")

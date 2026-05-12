@@ -21,17 +21,19 @@ def test_zip_extract_renames_full_md(build_result_zip: BuildResultZipFn) -> None
     assert assets == {}
 
 
-def test_zip_extract_collects_images(build_result_zip: BuildResultZipFn) -> None:
-    """Images at any depth land in assets/ keyed by basename."""
+def test_zip_extract_preserves_relpath(build_result_zip: BuildResultZipFn) -> None:
+    """Images keep their ZIP relpath under ``assets/`` so two files
+    with the same basename in different ZIP directories don't collapse.
+    """
     zip_bytes = build_result_zip(
         markdown="# Doc\n\n![Fig](images/fig1.png)\n",
         images={"images/fig1.png": _IMG_BYTES},
     )
     md, assets = extract_result_zip(zip_bytes)
-    assert "assets/fig1.png" in assets
-    assert assets["assets/fig1.png"] == _IMG_BYTES
-    # Original md ref "images/fig1.png" rewritten to wikilink.
-    assert "![[assets/fig1.png|Fig]]" in md
+    assert "assets/images/fig1.png" in assets
+    assert assets["assets/images/fig1.png"] == _IMG_BYTES
+    # md ref rewritten to the wikilink form, pointing at the relpath.
+    assert "![[assets/images/fig1.png|Fig]]" in md
     assert "(images/fig1.png)" not in md
 
 
@@ -119,3 +121,82 @@ def test_zip_extract_leaves_external_refs_alone(
     )
     md, _ = extract_result_zip(zip_bytes)
     assert "https://example.com/external.png" in md
+
+
+def test_zip_extract_external_url_basename_collision_does_not_rewrite(
+    build_result_zip: BuildResultZipFn,
+) -> None:
+    """An external URL whose basename collides with a local extracted
+    asset must still NOT be rewritten — a basename match across origins
+    would silently swap document semantics.
+    """
+    zip_bytes = build_result_zip(
+        markdown="![cap](https://cdn.example.com/fig.png)\n",
+        images={"fig.png": _IMG_BYTES},
+    )
+    md, _ = extract_result_zip(zip_bytes)
+    assert "https://cdn.example.com/fig.png" in md
+    assert "![[assets/fig.png" not in md
+
+
+def test_zip_extract_duplicate_basenames_in_different_dirs_kept(
+    build_result_zip: BuildResultZipFn,
+) -> None:
+    """Two ZIP images with the same basename in different directories
+    must both survive — preserving relpath under ``assets/``.
+    """
+    a = b"\x89PNG\r\n\x1a\n" + b"A" * 16
+    b = b"\x89PNG\r\n\x1a\n" + b"B" * 16
+    zip_bytes = build_result_zip(
+        markdown="![p1](page1/fig.png)\n\n![p2](page2/fig.png)\n",
+        images={"page1/fig.png": a, "page2/fig.png": b},
+    )
+    md, assets = extract_result_zip(zip_bytes)
+    assert assets["assets/page1/fig.png"] == a
+    assert assets["assets/page2/fig.png"] == b
+    assert "![[assets/page1/fig.png|p1]]" in md
+    assert "![[assets/page2/fig.png|p2]]" in md
+
+
+def test_zip_extract_backslash_traversal_rejected(
+    build_result_zip: BuildResultZipFn,
+) -> None:
+    """Backslash-encoded zip-slip attempts must not slip past the safe
+    path filter. ``a/..\\..\\..\\escape.png`` normalizes to
+    ``../../escape.png`` after backslash conversion and must be
+    rejected — without backslash awareness this would just collapse to
+    a basename and silently extract outside the staging tree.
+    """
+    zip_bytes = build_result_zip(
+        markdown="# Doc\n",
+        unsafe_entries=[
+            ("a/..\\..\\..\\escape.png", _IMG_BYTES),
+            ("..\\..\\..\\sneaky.png", _IMG_BYTES),
+        ],
+    )
+    _md, assets = extract_result_zip(zip_bytes)
+    for key in assets:
+        assert "escape" not in key
+        assert "sneaky" not in key
+        assert ".." not in key
+
+
+def test_zip_extract_oversized_entry_rejected(
+    build_result_zip: BuildResultZipFn,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ZIP entry declaring more than the cap uncompressed is refused
+    immediately — defends against decompression-bomb payloads from the
+    upstream CDN. We monkeypatch the cap low enough that a normal
+    fixture trips it; the production cap (64 MiB) is too costly to
+    exercise from a unit test directly.
+    """
+    monkeypatch.setattr(
+        "dikw_converter_mineru._zip_extract._MAX_ENTRY_UNCOMPRESSED", 8
+    )
+    zip_bytes = build_result_zip(
+        markdown="# Doc\n",
+        images={"big.png": _IMG_BYTES},  # ~24 bytes, exceeds cap of 8
+    )
+    with pytest.raises(MineruApiError, match="per-entry"):
+        extract_result_zip(zip_bytes)

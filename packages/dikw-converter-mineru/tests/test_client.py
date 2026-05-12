@@ -129,7 +129,10 @@ def test_client_builds_upload_request_correctly(
     assert payload["cache_tolerance"] == 31_536_000
     assert payload["enable_formula"] is True
     assert payload["enable_table"] is True
-    assert payload["files"][0]["model_version"] == "vlm"
+    # ``model_version`` lives at the top level of MinerU's batch payload,
+    # not nested under files[].
+    assert payload["model_version"] == "vlm"
+    assert "model_version" not in payload["files"][0]
     assert payload["files"][0]["data_id"] == "abc"
     assert payload["files"][0]["name"] == "paper.pdf"
 
@@ -143,6 +146,7 @@ def test_client_omits_model_version_when_none(
     httpx_mock.add_response(url=_BATCH_URL, method="POST", json=_ok_submit_response())
     client.submit(SubmitParams(file_name="deck.pptx", data_id="d", model_version=None))
     payload = json.loads(httpx_mock.get_requests()[0].read())
+    assert "model_version" not in payload
     assert "model_version" not in payload["files"][0]
 
 
@@ -313,3 +317,51 @@ def test_client_polling_timeout(
         with pytest.raises(MineruTimeoutError) as exc:
             c.poll_until_done("B123")
     assert "300" in str(exc.value)
+
+
+def test_client_poll_response_missing_data_raises(
+    httpx_mock: HTTPXMock, client: MineruClient
+) -> None:
+    """A 200 with no ``data`` object is a contract violation; fail fast
+    rather than treating the empty case as "pending" and timing out.
+    """
+    httpx_mock.add_response(
+        url=_BATCH_RESULTS, method="GET", json={"code": 0, "msg": "ok"}
+    )
+    with pytest.raises(MineruApiError, match="'data'"):
+        client.poll_until_done("B123")
+
+
+def test_client_poll_extract_result_wrong_type_raises(
+    httpx_mock: HTTPXMock, client: MineruClient
+) -> None:
+    """``extract_result`` arriving as a dict (or any non-list) is a
+    contract violation — refuse instead of silently waiting it out.
+    """
+    httpx_mock.add_response(
+        url=_BATCH_RESULTS,
+        method="GET",
+        json={"code": 0, "data": {"extract_result": {"state": "done"}}},
+    )
+    with pytest.raises(MineruApiError, match="extract_result"):
+        client.poll_until_done("B123")
+
+
+def test_client_error_msg_scrubs_token(
+    httpx_mock: HTTPXMock, client: MineruClient
+) -> None:
+    """If the upstream echoes our bearer token in an error msg field,
+    the raised exception must NOT contain the full token.
+    """
+    httpx_mock.add_response(
+        url=_BATCH_URL,
+        method="POST",
+        status_code=400,
+        json={
+            "code": "-60002",
+            "msg": f"upstream said: Bearer {_TOKEN}",
+        },
+    )
+    with pytest.raises(MineruInputError) as exc:
+        client.submit(SubmitParams(file_name="x.pdf", data_id="d"))
+    assert _TOKEN not in str(exc.value)

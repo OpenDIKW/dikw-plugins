@@ -132,13 +132,14 @@ class MineruClient:
     # ----- public API ----------------------------------------------------
 
     def submit(self, params: SubmitParams) -> SubmissionHandle:
+        # MinerU's v4 batch API takes ``model_version`` at the top level
+        # of the request, not nested under ``files[]``. Sending it
+        # per-file silently drops back to the default pipeline.
         files_entry: dict[str, Any] = {
             "name": params.file_name,
             "is_ocr": params.is_ocr,
             "data_id": params.data_id,
         }
-        if params.model_version is not None:
-            files_entry["model_version"] = params.model_version
         payload: dict[str, Any] = {
             "enable_formula": params.enable_formula,
             "enable_table": params.enable_table,
@@ -146,6 +147,8 @@ class MineruClient:
             "cache_tolerance": params.cache_tolerance,
             "files": [files_entry],
         }
+        if params.model_version is not None:
+            payload["model_version"] = params.model_version
         body = self._request_json_with_retry(
             "POST", _BATCH_UPLOAD_URLS, json_payload=payload
         )
@@ -154,7 +157,10 @@ class MineruClient:
         urls = data.get("file_urls") or []
         if not batch_id or not urls:
             raise MineruApiError(
-                f"MinerU submit response missing batch_id/file_urls: {body!r}"
+                _scrub(
+                    f"MinerU submit response missing batch_id/file_urls: {body!r}",
+                    self._token,
+                )
             )
         return SubmissionHandle(batch_id=batch_id, upload_url=urls[0])
 
@@ -191,18 +197,48 @@ class MineruClient:
         last_state = ""
         while True:
             body = self._request_json_with_retry("GET", url)
-            extract_results = (body.get("data") or {}).get("extract_result") or []
-            # No entries yet means the server hasn't enqueued our task —
-            # not "failed", just keep waiting.
-            first = extract_results[0] if extract_results else {}
-            state = first.get("state", "pending") if first else "pending"
+            data = body.get("data")
+            if not isinstance(data, dict):
+                raise MineruApiError(
+                    _scrub(
+                        f"MinerU poll response missing 'data' object: {body!r}",
+                        self._token,
+                    )
+                )
+            extract_results = data.get("extract_result")
+            # ``extract_result`` may be a list (one entry per task) or
+            # absent if the server hasn't enqueued the task yet. Anything
+            # else (string, dict, int) means a contract violation — don't
+            # wait it out as "pending".
+            if extract_results is None:
+                first: dict[str, Any] = {}
+            elif isinstance(extract_results, list):
+                first = extract_results[0] if extract_results else {}
+                if not isinstance(first, dict):
+                    raise MineruApiError(
+                        _scrub(
+                            f"MinerU poll extract_result[0] not a dict: {body!r}",
+                            self._token,
+                        )
+                    )
+            else:
+                raise MineruApiError(
+                    _scrub(
+                        f"MinerU poll extract_result not a list: {body!r}",
+                        self._token,
+                    )
+                )
+            state = first.get("state", "pending") or "pending"
             last_state = state
 
             if state == _STATE_DONE:
                 full_zip_url = first.get("full_zip_url")
                 if not isinstance(full_zip_url, str) or not full_zip_url:
                     raise MineruApiError(
-                        f"MinerU task done but full_zip_url missing: {body!r}"
+                        _scrub(
+                            f"MinerU task done but full_zip_url missing: {body!r}",
+                            self._token,
+                        )
                     )
                 return full_zip_url
             if state == _STATE_FAILED:
@@ -301,18 +337,16 @@ class MineruClient:
             f"{op}: exhausted retries without resolution"
         )
 
-    @staticmethod
-    def _safe_json(resp: httpx.Response) -> dict[str, Any]:
+    def _safe_json(self, resp: httpx.Response) -> dict[str, Any]:
         try:
             data = resp.json()
             return data if isinstance(data, dict) else {"_raw": data}
         except Exception:
-            return {"_text": MineruClient._safe_text(resp)}
+            return {"_text": self._safe_text(resp)}
 
-    @staticmethod
-    def _safe_text(resp: httpx.Response) -> str:
+    def _safe_text(self, resp: httpx.Response) -> str:
         try:
-            return resp.text[:500]
+            return _scrub(resp.text[:500], self._token)
         except Exception:
             return "<unreadable>"
 
@@ -325,12 +359,14 @@ class MineruClient:
     ) -> None:
         """Map a MinerU error code to a typed exception and raise it.
 
-        ``context`` is a short label (``"task"`` or ``"HTTP 401"``) that
-        differentiates the surrounding sentence so error sites stay
-        legible. The mapping itself lives in :data:`_AUTH_CODES` etc.
+        ``msg`` is server-supplied text — a proxy or backend that echoes
+        request headers could embed our bearer token in it, so we scrub
+        the value before letting it cross the public exception boundary.
+        ``context`` is a short caller-controlled label (``"task"`` /
+        ``"HTTP 401"``) and is trusted.
         """
         scode = "" if code is None else str(code)
-        text = msg or "(no message)"
+        text = _scrub(msg, self._token) if msg else "(no message)"
         exc_cls = _classify_code(scode)
         if exc_cls is MineruAuthError:
             raise exc_cls(
