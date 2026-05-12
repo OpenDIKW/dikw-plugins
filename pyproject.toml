@@ -1,0 +1,48 @@
+[project]
+name = "dikw-plugins-workspace"
+version = "0.0.0"
+description = "uv workspace root for dikw-core converter plugins. Not published — install individual packages from ``packages/`` instead."
+requires-python = ">=3.12"
+
+# Workspace members. Each package under packages/ has its own
+# pyproject.toml and is published independently to pypi.
+[tool.uv.workspace]
+members = ["packages/*"]
+
+# Pin a single dikw-core version across workspace members for local
+# dev — individual packages still declare their own ``dikw-core>=…``
+# range in their pyproject so pypi consumers don't see this constraint.
+[tool.uv.sources]
+dikw-core = { path = "../dikw-core", editable = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0",
+    "pytest-asyncio>=1.0",
+    "ruff>=0.15",
+    "mypy>=1.20",
+]
+
+# Shared tooling config — every package inherits these so style and
+# type strictness stay uniform across the workspace.
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["packages"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RUF"]
+ignore = ["E501"]  # line length is handled by the formatter
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/*" = ["SIM117"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+explicit_package_bases = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["packages"]
+addopts = "-ra -q"
