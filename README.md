@@ -21,7 +21,11 @@ versioned.
 | --------------------------- | ----------- | ------------ | ------------- |
 | `dikw-converter-example`    | `example`   | `.example`   | reference stub — copy as template |
 | `dikw-converter-epub`       | `epub`      | `.epub`      | 0.1.0 — pure-Python EPUB → markdown |
-| _(future)_ `dikw-converter-pdf` | TBD     | `.pdf`       | not yet built |
+| `dikw-converter-mineru`     | `mineru`    | `.pdf`, `.docx`, `.doc`, `.pptx`, `.ppt`, `.xlsx`, `.xls` | 0.1.0 — MinerU online API (PDF + Office); needs `MinerUAPIKey` env |
+
+`dikw-converter-mineru` covers multiple input formats because they all
+share one upstream tool. CLAUDE.md's "one format per package" guideline
+calls this out as the explicit exception when formats share an engine.
 
 ## Quick install
 
@@ -30,10 +34,15 @@ versioned.
 pip install dikw-core
 
 # Then install any plugin you want.
-pip install dikw-converter-pdf       # whenever it ships
+pip install dikw-converter-mineru    # PDF + DOCX + PPTX + XLSX via MinerU online
+pip install dikw-converter-epub      # pure-Python EPUB
+
+# MinerU is hosted — export your API token first.
+$env:MinerUAPIKey = "eyJ..."
 
 # Use it.
 dikw client import paper.pdf
+dikw client import book.epub
 ```
 
 ## I want to add a new plugin

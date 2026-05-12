@@ -1,0 +1,109 @@
+name: release
+
+# Triggered by tags of the form ``<package-name>-v<X.Y.Z>``, e.g.
+# ``dikw-converter-epub-v0.1.0``. The tag scopes the release to a
+# single workspace member; tagging here is the only way to publish.
+#
+# Pipeline:
+#   1. Parse tag → package name + version
+#   2. Verify ``packages/<name>/pyproject.toml``'s version matches
+#      (so a forgotten version bump fails before publication)
+#   3. Run that package's tests against a sibling-checkout of dikw-core
+#      (same layout as ``ci.yml``)
+#   4. ``uv build --package <name>`` → wheel + sdist
+#   5. Publish to PyPI via trusted publisher (OIDC, no API token)
+#   6. Create a GitHub Release with the artifacts attached
+#
+# One-time PyPI setup per package: configure a Trusted Publisher on
+# pypi.org pointing at ``opendikw/dikw-plugins`` → workflow
+# ``release.yml`` → environment (none). For the FIRST release of a
+# brand-new package name, use PyPI's "Pending Publisher" form so the
+# name can be claimed without an API token.
+
+on:
+  push:
+    tags:
+      - 'dikw-converter-*-v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # trusted publishing to PyPI
+      contents: write   # creating GitHub Releases
+    steps:
+      - name: Parse tag → package + version
+        id: tag
+        run: |
+          REF_NAME="${GITHUB_REF_NAME}"
+          if [[ ! "$REF_NAME" =~ ^(dikw-converter-[a-z0-9-]+)-v([0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9.+-]*)$ ]]; then
+            echo "::error::Tag '$REF_NAME' does not match '<package>-v<version>' (e.g. dikw-converter-epub-v0.1.0)"
+            exit 1
+          fi
+          PACKAGE="${BASH_REMATCH[1]}"
+          VERSION="${BASH_REMATCH[2]}"
+          echo "package=$PACKAGE" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing $PACKAGE v$VERSION"
+
+      - name: Checkout dikw-plugins
+        uses: actions/checkout@v4
+        with:
+          path: dikw-plugins
+
+      - name: Checkout dikw-core (sibling)
+        uses: actions/checkout@v4
+        with:
+          repository: opendikw/dikw-core
+          path: dikw-core
+          ref: main
+
+      - name: Verify package exists and version matches pyproject.toml
+        working-directory: dikw-plugins
+        run: |
+          PKG_DIR="packages/${{ steps.tag.outputs.package }}"
+          if [[ ! -d "$PKG_DIR" ]]; then
+            echo "::error::Package directory '$PKG_DIR' does not exist in this repo"
+            exit 1
+          fi
+          FILE_VERSION=$(python3 -c "import tomllib,sys; print(tomllib.load(open(sys.argv[1],'rb'))['project']['version'])" "$PKG_DIR/pyproject.toml")
+          if [[ "$FILE_VERSION" != "${{ steps.tag.outputs.version }}" ]]; then
+            echo "::error::Tag version '${{ steps.tag.outputs.version }}' does not match $PKG_DIR/pyproject.toml version '$FILE_VERSION' — bump the version field before tagging"
+            exit 1
+          fi
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Sync workspace
+        working-directory: dikw-plugins
+        run: uv sync --all-extras
+
+      - name: Test the released package
+        working-directory: dikw-plugins
+        run: uv run pytest packages/${{ steps.tag.outputs.package }} -v
+
+      - name: Build wheel and sdist
+        working-directory: dikw-plugins
+        run: uv build --package ${{ steps.tag.outputs.package }} --out-dir dist
+
+      - name: Publish to PyPI (trusted publisher / OIDC)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dikw-plugins/dist
+          skip-existing: true
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: dikw-plugins
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${{ steps.tag.outputs.package }} v${{ steps.tag.outputs.version }}" \
+            --generate-notes \
+            dist/*

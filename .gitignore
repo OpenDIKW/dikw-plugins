@@ -30,6 +30,17 @@ env/
 # Local agent state (Claude Code, etc.)
 .claude/
 
+# Secrets — never commit. Plugins read env vars from the process
+# environment; loading .env into the env is the user's responsibility
+# (uv run --env-file .env / direnv / shell export).
+.env
+.env.*
+!.env.example
+
+# Local experimentation: smoke-test fixtures, ad-hoc conversion
+# outputs, scratch scripts. Not part of the package or test suite.
+scratch/
+
 # Coverage
 .coverage
 htmlcov/
