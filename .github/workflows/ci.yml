@@ -5,6 +5,14 @@ on:
     branches: [main]
   pull_request:
 
+# Layout in the runner workspace:
+#   $GITHUB_WORKSPACE/dikw-plugins/   <- this repo
+#   $GITHUB_WORKSPACE/dikw-core/      <- sibling, sourced by tool.uv.sources
+#
+# This matches the local-dev sibling layout (opendikw/dikw-plugins +
+# opendikw/dikw-core) so ``tool.uv.sources = { path = "../dikw-core" }``
+# resolves the same way in CI as on a developer machine.
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -12,13 +20,16 @@ jobs:
       matrix:
         python-version: ["3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout dikw-plugins
+        uses: actions/checkout@v4
+        with:
+          path: dikw-plugins
 
       - name: Checkout dikw-core (sibling)
         uses: actions/checkout@v4
         with:
           repository: opendikw/dikw-core
-          path: ../dikw-core
+          path: dikw-core
           ref: main
 
       - name: Install uv
@@ -30,13 +41,17 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Sync workspace
+        working-directory: dikw-plugins
         run: uv sync --all-extras
 
       - name: Lint (ruff)
+        working-directory: dikw-plugins
         run: uv run ruff check .
 
       - name: Type-check (mypy)
+        working-directory: dikw-plugins
         run: uv run mypy packages/*/src
 
       - name: Test
+        working-directory: dikw-plugins
         run: uv run pytest -v
