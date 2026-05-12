@@ -12,11 +12,12 @@ MinerU returns a ZIP containing roughly::
 We:
 
 1. Rename ``full.md`` to ``<stem>.md``.
-2. Copy every image (extension in :data:`_IMAGE_EXTS`) to
+2. Copy every local asset candidate (extension in :data:`_ASSET_EXTS`) to
    ``<output>/assets/`` under a **normalized relative path** so that two
    images named ``fig.png`` in different ZIP directories don't collapse
    to one asset.
-3. Drop every other byproduct (``.json``, intermediate ``.pdf``, ``.html``).
+3. Drop every unreferenced byproduct (``.json``, intermediate ``.pdf``,
+   ``.html``).
 4. Rewrite markdown image refs to wikilink form
    ``![[assets/<path>|alt]]``. External URL refs
    (``https://...``) are left untouched — they aren't ours to rewrite,
@@ -40,6 +41,7 @@ from ._errors import MineruApiError
 
 _FULL_MD = "full.md"
 _IMAGE_EXTS = frozenset({".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".bmp"})
+_ASSET_EXTS = _IMAGE_EXTS | frozenset({".pdf"})
 
 # Per-entry and total uncompressed size caps. Real MinerU result ZIPs
 # tend to be < 50 MB; these caps are generous but not unbounded so a
@@ -48,10 +50,12 @@ _MAX_ENTRY_UNCOMPRESSED = 64 * 1024 * 1024  # 64 MB per asset
 _MAX_TOTAL_UNCOMPRESSED = 512 * 1024 * 1024  # 512 MB across all assets
 
 # Match BOTH md image syntaxes:
-#   ![alt](path)        — standard
-#   ![[path|alt]]       — wikilink (rare in MinerU output but defensive)
+#   ![alt](path "title") — standard, with optional title
+#   ![[path|alt]]        — wikilink (rare in MinerU output but defensive)
 _MD_IMAGE_RE = re.compile(
-    r"!\[(?P<alt_std>[^\]]*?)\]\((?P<path_std>[^)]+?)\)"
+    r"!\[(?P<alt_std>[^\]]*?)\]\(\s*(?P<path_std>[^)\n]+?)"
+    r"(?=\s+\"[^\"\n]*\"\s*\)|\s*\))"
+    r"(?:\s+\"[^\"\n]*\")?\s*\)"
     r"|!\[\[(?P<path_wiki>[^|\]]+?)(?:\|(?P<alt_wiki>[^\]]*?))?\]\]"
 )
 
@@ -112,8 +116,18 @@ def _safe_relpath(raw_name: str) -> str | None:
     return sanitize_asset_name(normalized)
 
 
-def _image_extension_ok(relpath: str) -> bool:
-    return posixpath.splitext(relpath)[1].lower() in _IMAGE_EXTS
+def _asset_extension_ok(relpath: str) -> bool:
+    return posixpath.splitext(relpath)[1].lower() in _ASSET_EXTS
+
+
+def _normalize_md_asset_ref(raw_path: str) -> str:
+    """Normalize a local markdown asset ref into the ZIP relpath form."""
+    decoded = urllib.parse.unquote(raw_path)
+    cleaned = sanitize_asset_name(decoded)
+    normalized = posixpath.normpath(cleaned)
+    if normalized in ("", "."):
+        return cleaned
+    return normalized.lstrip("/")
 
 
 def _rewrite_md_image_refs(
@@ -128,7 +142,8 @@ def _rewrite_md_image_refs(
     Match priority:
 
     1. Exact normalized relpath (``images/fig.png`` → ``assets/images/fig.png``).
-    2. Basename-only fallback, but ONLY when that basename is unique
+    2. Case-insensitive relpath fallback, but only when unique.
+    3. Basename-only fallback, but ONLY when that basename is unique
        across the asset set (so ``page1/fig.png`` and ``page2/fig.png``
        living side-by-side don't both rewrite to whichever was last).
 
@@ -137,11 +152,23 @@ def _rewrite_md_image_refs(
     swap in a local asset.
     """
     by_relpath: dict[str, str] = {}
+    by_relpath_folded: dict[str, list[str]] = {}
     by_basename: dict[str, list[str]] = {}
+    by_basename_folded: dict[str, list[str]] = {}
     for relpath, asset_path in asset_map.items():
         by_relpath[relpath] = asset_path
+        by_relpath_folded.setdefault(relpath.casefold(), []).append(asset_path)
         by_basename.setdefault(posixpath.basename(relpath), []).append(asset_path)
+        by_basename_folded.setdefault(
+            posixpath.basename(relpath).casefold(), []
+        ).append(asset_path)
     referenced: set[str] = set()
+
+    def _wikilink_if_unique(candidates: list[str], alt: str | None) -> str | None:
+        if len(candidates) != 1:
+            return None
+        referenced.add(candidates[0])
+        return wikilink(candidates[0], alt)
 
     def _sub(m: re.Match[str]) -> str:
         if m.group("path_std") is not None:
@@ -155,19 +182,35 @@ def _rewrite_md_image_refs(
         # for ``http://``, ``https://``, ``data:``, ``//example.com``
         # (netloc), etc.
         parsed = urllib.parse.urlparse(raw_path)
-        if parsed.scheme or parsed.netloc:
+        decoded = urllib.parse.unquote(raw_path)
+        decoded_parsed = urllib.parse.urlparse(decoded)
+        if (
+            parsed.scheme
+            or parsed.netloc
+            or decoded_parsed.scheme
+            or decoded_parsed.netloc
+        ):
             return m.group(0)
 
-        cleaned = sanitize_asset_name(raw_path)
+        cleaned = _normalize_md_asset_ref(raw_path)
         if cleaned in by_relpath:
             asset_path = by_relpath[cleaned]
             referenced.add(asset_path)
             return wikilink(asset_path, alt)
+        rewritten = _wikilink_if_unique(
+            by_relpath_folded.get(cleaned.casefold(), []), alt
+        )
+        if rewritten is not None:
+            return rewritten
         base = posixpath.basename(cleaned)
-        candidates = by_basename.get(base, [])
-        if len(candidates) == 1:
-            referenced.add(candidates[0])
-            return wikilink(candidates[0], alt)
+        rewritten = _wikilink_if_unique(by_basename.get(base, []), alt)
+        if rewritten is not None:
+            return rewritten
+        rewritten = _wikilink_if_unique(
+            by_basename_folded.get(base.casefold(), []), alt
+        )
+        if rewritten is not None:
+            return rewritten
         return m.group(0)
 
     return _MD_IMAGE_RE.sub(_sub, md_text), referenced
@@ -199,45 +242,51 @@ def extract_result_zip(zip_bytes: bytes) -> tuple[str, dict[str, bytes]]:
     cumulative_bytes = 0
 
     with zf:
-        for info in zf.infolist():
-            # Decompression-bomb guard: refuse oversized entries before
-            # we read them.
-            if info.file_size > _MAX_ENTRY_UNCOMPRESSED:
-                raise MineruApiError(
-                    f"MinerU ZIP entry {info.filename!r} declares "
-                    f"{info.file_size} bytes uncompressed, exceeds per-entry "
-                    f"cap {_MAX_ENTRY_UNCOMPRESSED}"
-                )
-            if cumulative_bytes + info.file_size > _MAX_TOTAL_UNCOMPRESSED:
-                raise MineruApiError(
-                    f"MinerU ZIP cumulative uncompressed size would exceed "
-                    f"{_MAX_TOTAL_UNCOMPRESSED} bytes; refusing to extract"
-                )
+        try:
+            infos = zf.infolist()
+            names = zf.namelist()
+            for info in infos:
+                # Decompression-bomb guard: refuse oversized entries before
+                # we read them.
+                if info.file_size > _MAX_ENTRY_UNCOMPRESSED:
+                    raise MineruApiError(
+                        f"MinerU ZIP entry {info.filename!r} declares "
+                        f"{info.file_size} bytes uncompressed, exceeds per-entry "
+                        f"cap {_MAX_ENTRY_UNCOMPRESSED}"
+                    )
+                if cumulative_bytes + info.file_size > _MAX_TOTAL_UNCOMPRESSED:
+                    raise MineruApiError(
+                        f"MinerU ZIP cumulative uncompressed size would exceed "
+                        f"{_MAX_TOTAL_UNCOMPRESSED} bytes; refusing to extract"
+                    )
 
-            relpath = _safe_relpath(info.filename)
-            if relpath is None:
-                continue
+                relpath = _safe_relpath(info.filename)
+                if relpath is None:
+                    continue
 
-            # ``full.md`` must live at the ZIP root. A ``nested/full.md``
-            # smuggled in by a malicious or buggy upstream would otherwise
-            # override the real body.
-            if relpath == _FULL_MD:
-                md_text = zf.read(info).decode("utf-8", errors="replace")
+                # ``full.md`` must live at the ZIP root. A ``nested/full.md``
+                # smuggled in by a malicious or buggy upstream would otherwise
+                # override the real body.
+                if relpath == _FULL_MD:
+                    md_text = zf.read(info).decode("utf-8", errors="replace")
+                    cumulative_bytes += info.file_size
+                    continue
+                if not _asset_extension_ok(relpath):
+                    # JSON, Office byproducts, HTML, anything not referenced
+                    # by dikw-core as a local asset candidate: drop.
+                    continue
+                if relpath in asset_map:
+                    continue
+                assets[f"assets/{relpath}"] = zf.read(info)
+                asset_map[relpath] = f"assets/{relpath}"
                 cumulative_bytes += info.file_size
-                continue
-            if not _image_extension_ok(relpath):
-                # JSON, intermediate PDFs, anything not an image: drop.
-                continue
-            if relpath in asset_map:
-                continue
-            assets[f"assets/{relpath}"] = zf.read(info)
-            asset_map[relpath] = f"assets/{relpath}"
-            cumulative_bytes += info.file_size
+        except (zipfile.BadZipFile, RuntimeError, NotImplementedError, OSError) as exc:
+            raise MineruApiError(f"MinerU result ZIP could not be read: {exc}") from exc
 
     if md_text is None:
         raise MineruApiError(
             "MinerU result ZIP did not contain full.md (got: "
-            f"{sorted(name for name in zf.namelist())[:10]}…)"
+            f"{sorted(names)[:10]}…)"
         )
 
     md_text = md_text.replace("\r\n", "\n").replace("\r", "\n")

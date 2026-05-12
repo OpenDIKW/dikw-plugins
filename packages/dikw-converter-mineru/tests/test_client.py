@@ -382,6 +382,21 @@ def test_client_submit_validates_file_urls_shape(
         client.submit(SubmitParams(file_name="x.pdf", data_id="d"))
 
 
+def test_client_submit_validates_every_file_url(
+    httpx_mock: HTTPXMock, client: MineruClient
+) -> None:
+    """The submit contract is a list of URL strings, not merely a list
+    whose first element happens to be usable.
+    """
+    httpx_mock.add_response(
+        url=_BATCH_URL,
+        method="POST",
+        json={"code": 0, "data": {"batch_id": "B", "file_urls": [_PRESIGNED, 123]}},
+    )
+    with pytest.raises(MineruApiError, match="file_urls"):
+        client.submit(SubmitParams(file_name="x.pdf", data_id="d"))
+
+
 def test_client_poll_state_non_string_raises(
     httpx_mock: HTTPXMock, client: MineruClient
 ) -> None:
@@ -436,4 +451,49 @@ def test_client_download_zip_size_cap(monkeypatch: pytest.MonkeyPatch) -> None:
     with httpx.Client(transport=transport) as http:
         c = MineruClient(client=http, token=_TOKEN, sleep=lambda _s: None)
         with pytest.raises(MineruApiError, match="download cap"):
+            c.download_zip("https://cdn.example.com/big.zip")
+
+
+def test_client_download_zip_follows_redirects() -> None:
+    """CDN URLs may redirect; the downloader must stream the final body,
+    not return an empty 302 response as a bogus ZIP.
+    """
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        if str(request.url) == "https://cdn.example.com/start.zip":
+            return httpx.Response(
+                302, headers={"Location": "https://cdn.example.com/final.zip"}
+            )
+        return httpx.Response(200, content=b"zip-bytes")
+
+    transport = httpx.MockTransport(handler)
+    with httpx.Client(transport=transport) as http:
+        c = MineruClient(client=http, token=_TOKEN, sleep=lambda _s: None)
+        assert c.download_zip("https://cdn.example.com/start.zip") == b"zip-bytes"
+    assert seen == [
+        "https://cdn.example.com/start.zip",
+        "https://cdn.example.com/final.zip",
+    ]
+
+
+def test_client_download_zip_rejects_declared_size_over_cap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A too-large Content-Length can be rejected before buffering the
+    response body; chunked/no-length responses remain protected by the
+    streaming cumulative counter.
+    """
+    monkeypatch.setattr(
+        "dikw_converter_mineru._client._MAX_ZIP_DOWNLOAD_BYTES", 16
+    )
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, headers={"Content-Length": "17"}, content=b"small")
+
+    transport = httpx.MockTransport(handler)
+    with httpx.Client(transport=transport) as http:
+        c = MineruClient(client=http, token=_TOKEN, sleep=lambda _s: None)
+        with pytest.raises(MineruApiError, match="Content-Length"):
             c.download_zip("https://cdn.example.com/big.zip")

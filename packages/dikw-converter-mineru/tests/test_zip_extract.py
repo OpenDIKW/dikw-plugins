@@ -259,3 +259,82 @@ def test_zip_extract_nested_full_md_ignored(
     md, _ = extract_result_zip(buf.getvalue())
     assert "real body" in md
     assert "evil override" not in md
+
+
+def test_zip_extract_rewrites_standard_md_ref_with_title(
+    build_result_zip: BuildResultZipFn,
+) -> None:
+    """Markdown image refs may carry an optional title attribute; it
+    must not become part of the asset path match.
+    """
+    zip_bytes = build_result_zip(
+        markdown='![Fig](images/fig.png "Figure title")\n',
+        images={"images/fig.png": _IMG_BYTES},
+    )
+    md, assets = extract_result_zip(zip_bytes)
+    assert assets["assets/images/fig.png"] == _IMG_BYTES
+    assert "![[assets/images/fig.png|Fig]]" in md
+    assert "Figure title" not in md
+
+
+def test_zip_extract_percent_decodes_local_ref(
+    build_result_zip: BuildResultZipFn,
+) -> None:
+    """MinerU sometimes percent-encodes spaces in local image refs; the
+    extractor should still match and keep the local asset.
+    """
+    zip_bytes = build_result_zip(
+        markdown="![Fig](images/My%20Figure.png)\n",
+        images={"images/My Figure.png": _IMG_BYTES},
+    )
+    md, assets = extract_result_zip(zip_bytes)
+    assert assets["assets/images/My Figure.png"] == _IMG_BYTES
+    assert "![[assets/images/My Figure.png|Fig]]" in md
+
+
+def test_zip_extract_matches_refs_case_insensitively_when_unique(
+    build_result_zip: BuildResultZipFn,
+) -> None:
+    """A case mismatch must not produce output that only works on
+    Windows' case-insensitive filesystem and fails on Linux.
+    """
+    zip_bytes = build_result_zip(
+        markdown="![Fig](images/fig.png)\n",
+        images={"images/Fig.PNG": _IMG_BYTES},
+    )
+    md, assets = extract_result_zip(zip_bytes)
+    assert assets["assets/images/Fig.PNG"] == _IMG_BYTES
+    assert "![[assets/images/Fig.PNG|Fig]]" in md
+
+
+def test_zip_extract_keeps_referenced_pdf_asset(
+    build_result_zip: BuildResultZipFn,
+) -> None:
+    """Non-image local assets are still valid when the markdown
+    explicitly embeds them; orphan filtering will drop unreferenced PDFs.
+    """
+    pdf_bytes = b"%PDF-1.4 attached\n"
+    zip_bytes = build_result_zip(
+        markdown="![Attachment](attachments/report.pdf)\n",
+        extra_files={"attachments/report.pdf": pdf_bytes},
+    )
+    md, assets = extract_result_zip(zip_bytes)
+    assert assets["assets/attachments/report.pdf"] == pdf_bytes
+    assert "![[assets/attachments/report.pdf|Attachment]]" in md
+
+
+def test_zip_extract_read_error_wrapped_as_api_error() -> None:
+    """CRC/read failures after ZipFile construction must still surface
+    as MineruApiError, not raw zipfile exceptions.
+    """
+    import zipfile
+    from io import BytesIO
+
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_STORED) as zf:
+        zf.writestr("full.md", "ok\n")
+    corrupted = bytearray(buf.getvalue())
+    corrupted[corrupted.index(b"ok\n")] = ord("n")
+
+    with pytest.raises(MineruApiError, match="could not be read"):
+        extract_result_zip(bytes(corrupted))

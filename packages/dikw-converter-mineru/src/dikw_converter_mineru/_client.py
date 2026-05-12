@@ -182,7 +182,7 @@ class MineruClient:
         if (
             not isinstance(urls, list)
             or not urls
-            or not isinstance(urls[0], str)
+            or not all(isinstance(url, str) and url for url in urls)
             or not urls[0]
         ):
             raise MineruApiError(
@@ -296,19 +296,30 @@ class MineruClient:
     def download_zip(self, zip_url: str) -> bytes:
         """GET the result CDN URL, capped at :data:`_MAX_ZIP_DOWNLOAD_BYTES`.
 
-        Streams the response and aborts the moment cumulative bytes
-        exceed the cap, so a hostile or misbehaving CDN can't OOM us
-        before the uncompressed-size guards in ``_zip_extract`` run.
-        Public CDN — no auth header.
+        Follows CDN redirects, rejects an over-cap ``Content-Length``
+        before buffering, and aborts the moment cumulative streamed
+        bytes exceed the cap. Public CDN — no auth header.
         """
         chunks: list[bytes] = []
         total = 0
         try:
-            with self._client.stream("GET", zip_url) as resp:
-                if resp.status_code >= 400:
+            with self._client.stream("GET", zip_url, follow_redirects=True) as resp:
+                if resp.status_code < 200 or resp.status_code >= 300:
                     raise MineruApiError(
                         f"MinerU result download failed: HTTP {resp.status_code}"
                     )
+                content_length = resp.headers.get("Content-Length")
+                if content_length is not None:
+                    try:
+                        declared = int(content_length)
+                    except ValueError:
+                        declared = -1
+                    if declared > _MAX_ZIP_DOWNLOAD_BYTES:
+                        raise MineruApiError(
+                            f"MinerU result ZIP Content-Length {declared} exceeds "
+                            f"{_MAX_ZIP_DOWNLOAD_BYTES} bytes download cap; "
+                            "refusing to buffer"
+                        )
                 for chunk in resp.iter_bytes():
                     total += len(chunk)
                     if total > _MAX_ZIP_DOWNLOAD_BYTES:
