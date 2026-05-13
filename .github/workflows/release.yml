@@ -8,11 +8,15 @@ name: release
 #   1. Parse tag → package name + version
 #   2. Verify ``packages/<name>/pyproject.toml``'s version matches
 #      (so a forgotten version bump fails before publication)
-#   3. Run that package's tests against a sibling-checkout of dikw-core
-#      (same layout as ``ci.yml``)
-#   4. ``uv build --package <name>`` → wheel + sdist
-#   5. Publish to PyPI via trusted publisher (OIDC, no API token)
-#   6. Create a GitHub Release with the artifacts attached
+#   3. Extract the CHANGELOG entry for that version → release notes
+#      (a missing entry fails the release fast)
+#   4. Run that package's tests plus the artifact-level packaging tests
+#      against a sibling-checkout of dikw-core (same layout as ``ci.yml``)
+#   5. ``uv build --package <name>`` → wheel + sdist
+#   6. ``twine check --strict`` over the artifacts (defense-in-depth)
+#   7. Publish to PyPI via trusted publisher (OIDC, no API token)
+#   8. Create a GitHub Release whose body is the extracted CHANGELOG
+#      block, with the artifacts attached
 #
 # One-time PyPI setup per package: configure a Trusted Publisher on
 # pypi.org pointing at ``opendikw/dikw-plugins`` → workflow
@@ -84,13 +88,40 @@ jobs:
         working-directory: dikw-plugins
         run: uv sync --all-extras
 
-      - name: Test the released package
+      - name: Verify CHANGELOG entry and extract release notes
+        working-directory: dikw-plugins
+        run: |
+          python scripts/extract_changelog.py \
+            "packages/${{ steps.tag.outputs.package }}/CHANGELOG.md" \
+            "${{ steps.tag.outputs.version }}" \
+            > "${RUNNER_TEMP}/release-notes.md"
+          echo "--- release notes ---"
+          cat "${RUNNER_TEMP}/release-notes.md"
+
+      - name: Test the released package's own unit tests
         working-directory: dikw-plugins
         run: uv run pytest packages/${{ steps.tag.outputs.package }} -v
+
+      - name: Run artifact-level packaging tests scoped to this package
+        working-directory: dikw-plugins
+        # ``-k`` selects packaging tests by their parametrize id, which is
+        # the underscore form (see tests/packaging/conftest.py). Passing
+        # the hyphenated dist name would be parsed as ``a - b - c``. Run
+        # as a separate step so the ``-k`` filter does NOT deselect the
+        # package's own unit tests above.
+        run: |
+          PKG_UNDERSCORE="$(echo '${{ steps.tag.outputs.package }}' | tr '-' '_')"
+          uv run pytest tests/packaging -k "$PKG_UNDERSCORE" -v
 
       - name: Build wheel and sdist
         working-directory: dikw-plugins
         run: uv build --package ${{ steps.tag.outputs.package }} --out-dir dist
+
+      - name: Twine check (defense-in-depth)
+        working-directory: dikw-plugins
+        # `uv build` drops a `.gitignore` into the out-dir; glob only
+        # the distribution files we actually want twine to validate.
+        run: uv run twine check --strict dist/*.whl dist/*.tar.gz
 
       - name: Publish to PyPI (trusted publisher / OIDC)
         uses: pypa/gh-action-pypi-publish@release/v1
@@ -105,5 +136,5 @@ jobs:
         run: |
           gh release create "${GITHUB_REF_NAME}" \
             --title "${{ steps.tag.outputs.package }} v${{ steps.tag.outputs.version }}" \
-            --generate-notes \
-            dist/*
+            --notes-file "${RUNNER_TEMP}/release-notes.md" \
+            dist/*.whl dist/*.tar.gz
