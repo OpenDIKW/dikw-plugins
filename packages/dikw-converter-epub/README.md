@@ -71,9 +71,24 @@ EPUB whose images live under `EPUB/media/` produces `assets/media/...`.
 # In a real dikw client environment:
 pip install dikw-converter-epub
 
+# Upgrade later:
+pip install --upgrade dikw-converter-epub
+
+# Pin a specific version:
+pip install 'dikw-converter-epub==0.1.0'
+
+# Uninstall — the entry-point disappears on next discovery.
+pip uninstall dikw-converter-epub
+
 # For local development from this monorepo:
 pip install -e packages/dikw-converter-epub
 ```
+
+## Changelog
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the per-release history. Each
+GitHub Release also carries the same notes; published wheels and
+sdists are attached there for offline / air-gapped installs.
 
 ## Run the tests
 

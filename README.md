@@ -45,6 +45,60 @@ dikw client import paper.pdf
 dikw client import book.epub
 ```
 
+`uv pip install` works identically; substitute `uv pip` for `pip` if
+you manage envs with `uv`.
+
+## Manage installed plugins
+
+Each `dikw-converter-*` is a normal PyPI package — upgrading, pinning,
+and uninstalling follow the standard `pip` / `uv` semantics with no
+special handling on dikw-core's side.
+
+```bash
+# Upgrade to the latest published version.
+pip install --upgrade dikw-converter-epub
+
+# Pin to a specific version (recommended for production environments —
+# converter output is deterministic per pinned plugin version).
+pip install 'dikw-converter-mineru==0.1.0'
+
+# Inspect what's installed and which entry-points it registers.
+pip show dikw-converter-epub
+python -c "from importlib.metadata import entry_points; print([(e.name, e.value) for e in entry_points(group='dikw.client.converters')])"
+
+# Uninstall — the entry-point disappears the next time dikw client
+# does converter discovery, so there's nothing else to clean up
+# inside the host. Files already imported into <base>/sources/ stay
+# put (they're not the plugin's data).
+pip uninstall dikw-converter-epub
+```
+
+### Offline / restricted networks
+
+CI builds attach every release's wheel and sdist to its GitHub Release.
+For air-gapped environments, download the wheel from the release page
+and install from the local file:
+
+```bash
+# From https://github.com/opendikw/dikw-plugins/releases
+pip install ./dikw_converter_epub-0.1.0-py3-none-any.whl
+```
+
+The wheel still declares its `dikw-core` dependency; if PyPI isn't
+reachable, install `dikw-core` from its own GitHub Release first.
+
+### Where releases live
+
+- **PyPI**: `https://pypi.org/project/dikw-converter-<format>/`
+  (e.g. [dikw-converter-epub][pypi-epub]).
+- **GitHub Releases**: `https://github.com/opendikw/dikw-plugins/releases`
+  — tagged `dikw-converter-<format>-vX.Y.Z`, with release notes lifted
+  verbatim from that package's `CHANGELOG.md`.
+- **Per-package changelog**: each `packages/dikw-converter-<format>/CHANGELOG.md`
+  is the authoritative history for that plugin.
+
+[pypi-epub]: https://pypi.org/project/dikw-converter-epub/
+
 ## I want to add a new plugin
 
 Start with [`docs/plugin-author-guide.md`](docs/plugin-author-guide.md)

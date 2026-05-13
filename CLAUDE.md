@@ -74,7 +74,16 @@ dikw client import sample.pdf
   with every asset image-referenced from the md (see
   `docs/architecture.md` § "Asset reference rule").
 - **Versioning**: each package is independently SemVer'd. Bump the
-  package's own `version` field, tag `dikw-converter-pdf-vX.Y.Z`.
+  package's own `version` field AND add a matching `## [X.Y.Z]` block
+  at the top of that package's `CHANGELOG.md` in the same commit —
+  the release pipeline rejects a tag whose version is not present in
+  the changelog.
+- **Releasing**: tagging `dikw-converter-<format>-vX.Y.Z` triggers
+  `.github/workflows/release.yml` (PyPI via OIDC + GitHub Release).
+  Before tagging, run `uv run python scripts/check-package.py
+  dikw-converter-<format>` locally — it executes the same artifact
+  gate (`tests/packaging/`) that CI runs, so red on your machine =
+  red on the runner. Full procedure in `docs/release-process.md`.
 
 ## Tooling
 

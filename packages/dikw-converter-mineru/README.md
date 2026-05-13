@@ -34,9 +34,24 @@ lighter local converter). Both may land in v0.2 behind an env flag.
 # Once published:
 pip install dikw-converter-mineru
 
+# Upgrade later:
+pip install --upgrade dikw-converter-mineru
+
+# Pin a specific version:
+pip install 'dikw-converter-mineru==0.1.0'
+
+# Uninstall — the entry-point disappears on next discovery.
+pip uninstall dikw-converter-mineru
+
 # For local development from this monorepo:
 pip install -e packages/dikw-converter-mineru
 ```
+
+## Changelog
+
+See [`CHANGELOG.md`](CHANGELOG.md) for the per-release history. Each
+GitHub Release also carries the same notes; published wheels and
+sdists are attached there for offline / air-gapped installs.
 
 ## Auth — `MinerUAPIKey` env var
 

@@ -172,10 +172,41 @@ seed or document the cost.
 
 ## 6. Publish
 
-Each package is independently versioned. Bump `version` in the
-package's `pyproject.toml`, tag `dikw-converter-pdf-vX.Y.Z`, and push.
-CI publishes to pypi (TBD: trusted-publishing config; mirror what
-dikw-core does in `.github/workflows/release.yml`).
+Each package is independently versioned and released. The full release
+mechanics, PyPI Pending Publisher setup, and rollback procedure live in
+[`docs/release-process.md`](release-process.md); the author-side
+checklist is:
+
+1. **Bump the version** in `packages/dikw-converter-<format>/pyproject.toml`
+   per SemVer.
+2. **Write a CHANGELOG entry** as the new top section of
+   `packages/dikw-converter-<format>/CHANGELOG.md`, following the
+   Keep a Changelog format already in place. The release pipeline reads
+   this block as the GitHub Release body and fails if it's missing.
+3. **Run the local gate**:
+
+   ```bash
+   uv run python scripts/check-package.py dikw-converter-<format>
+   ```
+
+   This rebuilds the wheel + sdist, runs `tests/packaging/` scoped to
+   your package (artifact validation, entry-point discoverability,
+   `twine check --strict`), and prints the would-be release notes.
+4. **Tag and push**:
+
+   ```bash
+   git tag dikw-converter-<format>-vX.Y.Z
+   git push origin dikw-converter-<format>-vX.Y.Z
+   ```
+
+   `.github/workflows/release.yml` matches the tag, re-runs the gate,
+   builds, validates with `twine check`, and publishes via the PyPI
+   trusted publisher (OIDC) plus a GitHub Release with the artifacts
+   attached.
+
+First-ever release of a brand-new package name requires a one-time
+**PyPI Pending Publisher** setup so PyPI knows to trust the workflow.
+See `docs/release-process.md` for the form to fill in.
 
 ## Anti-patterns
 

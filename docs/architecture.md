@@ -246,7 +246,38 @@ either:
 - Pin the upstream tool's seed where exposed, or
 - Document the non-determinism so users understand the cost.
 
-## 11. Pointers
+## 11. Distribution
+
+Each plugin package is published as a stand-alone wheel + sdist on PyPI;
+the user installs only the converters they need (`pip install
+dikw-converter-mineru`). Per-package independent versioning means a
+breaking change to one plugin never forces a re-release of the others.
+
+The artifact itself is the contract:
+
+- `pyproject.toml`'s `[project.entry-points."dikw.client.converters"]`
+  table flows verbatim into the wheel's `entry_points.txt`. After a
+  user runs `pip install`, `importlib.metadata.entry_points(group=
+  "dikw.client.converters")` enumerates it and the next non-md
+  `dikw client import` picks it up — no host-side registration step.
+- `pip uninstall` removes the wheel and the entry-point disappears
+  on the next discovery. dikw-core does not cache; the contract is
+  whatever the current environment exposes.
+
+Release mechanics:
+
+- Tagging `dikw-converter-<name>-vX.Y.Z` triggers
+  `.github/workflows/release.yml` (OIDC trusted-publisher → PyPI +
+  attached wheel/sdist on the GitHub Release). The full procedure,
+  including PyPI Pending Publisher first-time setup and rollback, is
+  in [`release-process.md`](release-process.md).
+- The release pipeline is gated by `tests/packaging/` — artifact-level
+  tests that build the wheel, install it into a clean venv, and
+  verify the entry-point is actually discoverable. A plugin whose
+  `pyproject.toml` declares an entry-point but whose wheel doesn't
+  expose it cannot publish.
+
+## 12. Pointers
 
 - [`dikw-core/src/dikw_core/client/converters.py`](https://github.com/opendikw/dikw-core/blob/main/src/dikw_core/client/converters.py)
   — the actual Protocol + discovery + selection logic. Read this once

@@ -41,6 +41,17 @@ pip install -e ../../packages/dikw-converter-example
 
 Or from the workspace root with `uv sync`.
 
+The stub is also published to PyPI as part of the
+`dikw-converter-*` release pipeline so the copy-as-template workflow
+in `docs/plugin-author-guide.md` round-trips through real release
+mechanics — but `pip install dikw-converter-example` is **not**
+something a normal user should ever do.
+
+## Changelog
+
+See [`CHANGELOG.md`](CHANGELOG.md) — the stub still keeps a per-release
+history so the artifact-level tests have something to validate.
+
 ## Run the tests
 
 ```bash
