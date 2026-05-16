@@ -27,8 +27,8 @@ dikw-converter-<format>-v<X.Y.Z>
 
 1. **Parse the tag** into `package` and `version` using the regex
    `^(dikw-converter-[a-z0-9-]+)-v([0-9]+\.[0-9]+\.[0-9]+[a-zA-Z0-9.+-]*)$`.
-2. **Checkout** this repo plus a sibling checkout of `dikw-core@main`
-   (same layout as local dev).
+2. **Checkout** this repo. ``dikw-core`` is pulled from PyPI by each
+   plugin's own ``[project.dependencies]``; no sibling checkout needed.
 3. **Verify** the tag version equals `packages/<package>/pyproject.toml`'s
    `project.version` — a tag without a matching version bump fails fast.
 4. **Sync** the uv workspace with `uv sync --all-extras`.

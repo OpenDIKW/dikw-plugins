@@ -9,11 +9,10 @@ requires-python = ">=3.12"
 [tool.uv.workspace]
 members = ["packages/*"]
 
-# Pin a single dikw-core version across workspace members for local
-# dev — individual packages still declare their own ``dikw-core>=…``
-# range in their pyproject so pypi consumers don't see this constraint.
-[tool.uv.sources]
-dikw-core = { path = "../dikw-core", editable = true }
+# Note: ``dikw-core`` is resolved from PyPI via each plugin's own
+# ``[project.dependencies]`` entry (``dikw-core>=…``). For local dev
+# against an unreleased dikw-core, drop ``pip install -e ../dikw-core``
+# into the synced env after ``uv sync`` — see CLAUDE.md "Dev workflow".
 
 [dependency-groups]
 dev = [
