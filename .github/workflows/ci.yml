@@ -42,7 +42,10 @@ jobs:
 
       - name: Sync workspace
         working-directory: dikw-plugins
-        run: uv sync --all-extras
+        # --all-packages installs every workspace member (editable) so
+        # their declared deps (e.g. mineru's httpx) land in the env.
+        # Without it, uv only syncs the workspace root's own deps.
+        run: uv sync --all-packages --all-extras
 
       - name: Lint (ruff)
         working-directory: dikw-plugins
