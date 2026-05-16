@@ -86,7 +86,11 @@ jobs:
 
       - name: Sync workspace
         working-directory: dikw-plugins
-        run: uv sync --all-extras
+        # --all-packages installs every workspace member (editable) so
+        # their declared deps + dev groups (e.g. mineru's pytest-httpx)
+        # land in the env. Without it, the released package's tests
+        # can't even import the package they're testing.
+        run: uv sync --all-packages --all-extras
 
       - name: Verify CHANGELOG entry and extract release notes
         working-directory: dikw-plugins
