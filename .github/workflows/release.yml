@@ -51,7 +51,7 @@ jobs:
           echo "Releasing $PACKAGE v$VERSION"
 
       - name: Checkout dikw-plugins
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: dikw-plugins
 
