@@ -123,18 +123,29 @@ dikw-plugins/
 ├── README.md                 (you are here)
 ├── CLAUDE.md                 agent guidance — start with docs/architecture.md
 ├── CONTEXT.md                local terms (defers to dikw-core's glossary)
+├── pyproject.toml            uv workspace root
+├── uv.lock                   committed for reproducible installs
+├── .github/
+│   ├── workflows/
+│   │   ├── ci.yml            ruff + mypy + pytest + packaging gate + build smoke
+│   │   ├── codeql.yml        Python static analysis on PR + weekly cron
+│   │   └── release.yml       tag → PyPI (trusted publisher) + GitHub Release
+│   ├── dependabot.yml        weekly uv + github-actions updates
+│   ├── CODEOWNERS            review routing
+│   └── PULL_REQUEST_TEMPLATE.md
 ├── docs/
 │   ├── architecture.md       why client-side plugin, what the contract is
 │   ├── plugin-author-guide.md  tutorial: write a new converter
 │   ├── release-process.md    tag → CI → PyPI + GitHub Release pipeline
 │   └── tool-survey.md        PDF/EPUB tool ecosystem snapshot (2026-05)
-├── pyproject.toml            uv workspace root
+├── scripts/
+│   ├── check-package.py      local pre-release gate (same checks as release.yml)
+│   └── extract_changelog.py  pulls one ## [X.Y.Z] block out of a CHANGELOG
+├── tests/packaging/          artifact-level wheel/sdist/entry-point invariants
 └── packages/
-    └── dikw-converter-example/    reference stub
-        ├── pyproject.toml
-        ├── README.md
-        ├── src/dikw_converter_example/__init__.py
-        └── tests/test_example.py
+    ├── dikw-converter-example/   reference stub — copy as template for new plugins
+    ├── dikw-converter-epub/      pure-Python EPUB → markdown (0.1.0, on PyPI)
+    └── dikw-converter-mineru/    MinerU online API for PDF + Office (0.1.0, on PyPI)
 ```
 
 ## Dev workflow
