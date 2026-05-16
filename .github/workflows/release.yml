@@ -11,7 +11,7 @@ name: release
 #   3. Extract the CHANGELOG entry for that version → release notes
 #      (a missing entry fails the release fast)
 #   4. Run that package's tests plus the artifact-level packaging tests
-#      against a sibling-checkout of dikw-core (same layout as ``ci.yml``)
+#      (dikw-core is resolved from PyPI via the package's own deps)
 #   5. ``uv build --package <name>`` → wheel + sdist
 #   6. ``twine check --strict`` over the artifacts (defense-in-depth)
 #   7. Publish to PyPI via trusted publisher (OIDC, no API token)
@@ -54,13 +54,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: dikw-plugins
-
-      - name: Checkout dikw-core (sibling)
-        uses: actions/checkout@v4
-        with:
-          repository: opendikw/dikw-core
-          path: dikw-core
-          ref: main
 
       - name: Verify package exists and version matches pyproject.toml
         working-directory: dikw-plugins

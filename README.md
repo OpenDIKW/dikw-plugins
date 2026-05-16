@@ -31,8 +31,7 @@ calls this out as the explicit exception when formats share an engine.
 
 ```bash
 # Install dikw-core first (the host).
-# Not yet on PyPI — install from GitHub until first PyPI release:
-pip install "git+https://github.com/opendikw/dikw-core@main"
+pip install dikw-core
 
 # Then install any plugin you want.
 pip install dikw-converter-mineru    # PDF + DOCX + PPTX + XLSX via MinerU online

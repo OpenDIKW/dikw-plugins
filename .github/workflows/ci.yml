@@ -12,14 +12,6 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Layout in the runner workspace:
-#   $GITHUB_WORKSPACE/dikw-plugins/   <- this repo
-#   $GITHUB_WORKSPACE/dikw-core/      <- sibling, sourced by tool.uv.sources
-#
-# This matches the local-dev sibling layout (opendikw/dikw-plugins +
-# opendikw/dikw-core) so ``tool.uv.sources = { path = "../dikw-core" }``
-# resolves the same way in CI as on a developer machine.
-
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -31,13 +23,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: dikw-plugins
-
-      - name: Checkout dikw-core (sibling)
-        uses: actions/checkout@v4
-        with:
-          repository: opendikw/dikw-core
-          path: dikw-core
-          ref: main
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3

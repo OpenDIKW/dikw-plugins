@@ -295,7 +295,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "dikw-core", editable = "../dikw-core" }]
+requires-dist = [{ name = "dikw-core", specifier = ">=0.0.1" }]
 
 [[package]]
 name = "dikw-converter-example"
@@ -306,7 +306,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "dikw-core", editable = "../dikw-core" }]
+requires-dist = [{ name = "dikw-core", specifier = ">=0.0.1" }]
 
 [[package]]
 name = "dikw-converter-mineru"
@@ -324,7 +324,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dikw-core", editable = "../dikw-core" },
+    { name = "dikw-core", specifier = ">=0.0.1" },
     { name = "httpx", specifier = ">=0.27" },
 ]
 
@@ -333,8 +333,8 @@ dev = [{ name = "pytest-httpx", specifier = ">=0.30" }]
 
 [[package]]
 name = "dikw-core"
-version = "0.0.1"
-source = { editable = "../dikw-core" }
+version = "0.0.2"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anthropic" },
     { name = "fastapi" },
@@ -350,37 +350,9 @@ dependencies = [
     { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "anthropic", specifier = ">=0.96" },
-    { name = "fastapi", specifier = ">=0.136" },
-    { name = "httpx", specifier = ">=0.28" },
-    { name = "jieba", marker = "extra == 'cjk'", specifier = ">=0.42" },
-    { name = "markdown-it-py", specifier = ">=4.0" },
-    { name = "openai", specifier = ">=2.32" },
-    { name = "pgvector", marker = "extra == 'postgres'", specifier = ">=0.4" },
-    { name = "psycopg", extras = ["binary", "pool"], marker = "extra == 'postgres'", specifier = ">=3.3" },
-    { name = "pydantic", specifier = ">=2.13" },
-    { name = "python-frontmatter", specifier = ">=1.1" },
-    { name = "python-multipart", specifier = ">=0.0.26" },
-    { name = "pyyaml", specifier = ">=6.0" },
-    { name = "rich", specifier = ">=15.0" },
-    { name = "sqlite-vec", specifier = ">=0.1.9" },
-    { name = "typer", specifier = ">=0.24" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.44" },
-]
-provides-extras = ["postgres", "cjk"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "jieba", specifier = ">=0.42" },
-    { name = "mypy", specifier = ">=1.20" },
-    { name = "pytest", specifier = ">=9.0" },
-    { name = "pytest-asyncio", specifier = ">=1.0" },
-    { name = "pytest-dotenv", specifier = ">=0.5" },
-    { name = "ruff", specifier = ">=0.15" },
-    { name = "types-pyyaml" },
+sdist = { url = "https://files.pythonhosted.org/packages/29/bc/7774bb34c2cb6a06442fa2120624aa3569afb81adc1f66ef052320e3d34f/dikw_core-0.0.2.tar.gz", hash = "sha256:8afd7946afcd05e41ba84801f9773373191e4b48bb66e96ad82bdc71f4460f34", size = 1716492, upload-time = "2026-05-16T14:18:14.894Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3b/ac/43338a351108f33e6340a171f554d2798489c0adb72df9dae412e48754ca/dikw_core-0.0.2-py3-none-any.whl", hash = "sha256:8d11154d15154f744b095e29eb464fa9c379a71a29c2565c1693ef579a7d6d25", size = 1287584, upload-time = "2026-05-16T14:18:12.819Z" },
 ]
 
 [[package]]
