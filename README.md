@@ -123,6 +123,7 @@ dikw-plugins/
 ├── docs/
 │   ├── architecture.md       why client-side plugin, what the contract is
 │   ├── plugin-author-guide.md  tutorial: write a new converter
+│   ├── release-process.md    tag → CI → PyPI + GitHub Release pipeline
 │   └── tool-survey.md        PDF/EPUB tool ecosystem snapshot (2026-05)
 ├── pyproject.toml            uv workspace root
 └── packages/
