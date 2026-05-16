@@ -1,0 +1,15 @@
+# CODEOWNERS — routes reviewers automatically on PR open.
+# Paired with branch protection's ``require_code_owner_reviews``.
+#
+# Solo-maintainer for now; split per-package as collaborators join.
+
+* @holo
+
+/.github/                            @holo
+/docs/                               @holo
+/scripts/                            @holo
+/tests/packaging/                    @holo
+
+/packages/dikw-converter-epub/       @holo
+/packages/dikw-converter-example/    @holo
+/packages/dikw-converter-mineru/     @holo

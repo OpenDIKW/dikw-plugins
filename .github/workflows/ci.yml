@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+# PR runs cancel each other on new pushes; main runs queue to keep
+# history-correct status checks. Without this, two quick pushes to a
+# PR burn double Actions minutes for no useful signal.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 # Layout in the runner workspace:
 #   $GITHUB_WORKSPACE/dikw-plugins/   <- this repo
 #   $GITHUB_WORKSPACE/dikw-core/      <- sibling, sourced by tool.uv.sources
@@ -40,6 +47,12 @@ jobs:
       - name: Set up Python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
 
+      - name: Verify uv.lock is in sync with pyproject.toml
+        working-directory: dikw-plugins
+        # Fails if pyproject.toml was edited without re-locking; keeps
+        # lockfile drift out of main.
+        run: uv lock --locked
+
       - name: Sync workspace
         working-directory: dikw-plugins
         # --all-packages installs every workspace member (editable) so
@@ -55,6 +68,21 @@ jobs:
         working-directory: dikw-plugins
         run: uv run mypy packages/*/src
 
-      - name: Test
+      - name: Test (fast — unit tests)
         working-directory: dikw-plugins
-        run: uv run pytest -v
+        # Excludes tests/packaging so its slow ephemeral-venv builds
+        # don't gate every push on a separate signal step below.
+        run: uv run pytest -v --ignore=tests/packaging
+
+      - name: Packaging tests (artifact-level gate)
+        working-directory: dikw-plugins
+        # Promotes the wheel/sdist/entry-point/METADATA/CHANGELOG
+        # invariants from release-only to every PR — catches packaging
+        # bugs before a tag is cut.
+        run: uv run pytest tests/packaging -v
+
+      - name: Build smoke (uv build all packages)
+        working-directory: dikw-plugins
+        # Surfaces wheel-build failures (bad hatch config, missing
+        # files, etc.) at PR time instead of release time.
+        run: uv build --all-packages --out-dir /tmp/dist

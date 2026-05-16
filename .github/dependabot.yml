@@ -1,0 +1,35 @@
+version: 2
+
+# Weekly dependency + GitHub Actions update PRs.
+#
+# - ``uv`` ecosystem reads pyproject.toml + uv.lock across the
+#   workspace, so this covers root + every member package in one entry.
+#   (Requires Dependabot's ``uv`` support — released 2025. If it ever
+#   misreports the ecosystem as unsupported, fall back to
+#   ``package-ecosystem: pip`` which reads pyproject dependencies
+#   without lockfile awareness.)
+# - ``github-actions`` keeps actions/checkout, setup-uv, codeql-action
+#   etc. current.
+
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "deps"
+    commit-message:
+      prefix: "deps"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "ci"
+    commit-message:
+      prefix: "ci"
