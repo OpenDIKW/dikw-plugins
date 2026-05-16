@@ -31,14 +31,18 @@ calls this out as the explicit exception when formats share an engine.
 
 ```bash
 # Install dikw-core first (the host).
-pip install dikw-core
+# Not yet on PyPI — install from GitHub until first PyPI release:
+pip install "git+https://github.com/opendikw/dikw-core@main"
 
 # Then install any plugin you want.
 pip install dikw-converter-mineru    # PDF + DOCX + PPTX + XLSX via MinerU online
 pip install dikw-converter-epub      # pure-Python EPUB
 
 # MinerU is hosted — export your API token first.
-$env:MinerUAPIKey = "eyJ..."
+# See packages/dikw-converter-mineru/README.md § Auth for the 3-tier
+# resolution order, token rotation, and how to load .env per shell.
+$env:MinerUAPIKey = "eyJ..."         # PowerShell
+# export MinerUAPIKey="eyJ..."       # bash / zsh
 
 # Use it.
 dikw client import paper.pdf
