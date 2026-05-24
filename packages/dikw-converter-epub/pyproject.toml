@@ -18,7 +18,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "dikw-core>=0.0.1",
+    "dikw-core>=0.2.7",
 ]
 
 # Register this plugin with dikw client's converter discovery.
