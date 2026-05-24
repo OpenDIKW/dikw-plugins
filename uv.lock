@@ -281,7 +281,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "dikw-core", specifier = ">=0.0.1" }]
+requires-dist = [{ name = "dikw-core", specifier = ">=0.2.7" }]
 
 [[package]]
 name = "dikw-converter-example"
@@ -292,7 +292,7 @@ dependencies = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "dikw-core", specifier = ">=0.0.1" }]
+requires-dist = [{ name = "dikw-core", specifier = ">=0.2.7" }]
 
 [[package]]
 name = "dikw-converter-mineru"
@@ -310,7 +310,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dikw-core", specifier = ">=0.0.1" },
+    { name = "dikw-core", specifier = ">=0.2.7" },
     { name = "httpx", specifier = ">=0.27" },
 ]
 
@@ -319,7 +319,7 @@ dev = [{ name = "pytest-httpx", specifier = ">=0.30" }]
 
 [[package]]
 name = "dikw-core"
-version = "0.0.2"
+version = "0.2.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anthropic" },
@@ -336,9 +336,9 @@ dependencies = [
     { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/29/bc/7774bb34c2cb6a06442fa2120624aa3569afb81adc1f66ef052320e3d34f/dikw_core-0.0.2.tar.gz", hash = "sha256:8afd7946afcd05e41ba84801f9773373191e4b48bb66e96ad82bdc71f4460f34", size = 1716492, upload-time = "2026-05-16T14:18:14.894Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ed/da/9177f6dd2ba1d7686d86b6c665710fa64d356ae34a82cca6ad296345da07/dikw_core-0.2.7.tar.gz", hash = "sha256:cb7e1dc56b60c15f2acea5c2b6da05b0ce08616b5231d3e5f8ea2b938142c340", size = 1793314, upload-time = "2026-05-23T23:13:33.163Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3b/ac/43338a351108f33e6340a171f554d2798489c0adb72df9dae412e48754ca/dikw_core-0.0.2-py3-none-any.whl", hash = "sha256:8d11154d15154f744b095e29eb464fa9c379a71a29c2565c1693ef579a7d6d25", size = 1287584, upload-time = "2026-05-16T14:18:12.819Z" },
+    { url = "https://files.pythonhosted.org/packages/38/3d/49d148d7f9b486b07e815311603adf240c4e995bf5dce9f37e3b9bfa95ac/dikw_core-0.2.7-py3-none-any.whl", hash = "sha256:b3404de71e10dd148265b47b00fcdb47e546db4ff53132cd31f50bff072f8f8a", size = 1304470, upload-time = "2026-05-23T23:13:31.249Z" },
 ]
 
 [[package]]
