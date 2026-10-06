@@ -35,7 +35,7 @@ Read the document that matches your change:
 ## Dev workflow
 
 ```bash
-uv sync                                # workspace deps
+uv sync --all-packages --all-extras    # every workspace member and its deps (same as CI)
 uv run pytest                          # all package tests
 uv run pytest packages/dikw-converter-mineru/tests  # one package
 uv run ruff check .
@@ -52,7 +52,7 @@ dikw client import sample.pdf
 - **Package names:** `dikw-converter-<format>`. One format per package is the norm. A multi-format package is allowed only when the formats share an upstream tool (for example a hypothetical `dikw-converter-pandoc`).
 - **Module names:** `dikw_converter_<format>` (the Python identifier form).
 - **Engine names:** the `Converter.name` attribute. Keep it short and unique across the plugins a user installs (for example `marker`, `mineru`, `docling`).
-- **Output layout:** `<output_dir>/<stem>.md` + `<output_dir>/assets/*`. The Markdown must image-reference every asset (see `docs/architecture.md` § "Asset reference rule").
+- **Output layout:** `<output_dir>/<stem>.md` + `<output_dir>/assets/*`. The Markdown must image-reference every asset (see `docs/architecture.md` § 5 "Output layout convention").
 - **Versioning:** each package has its own SemVer. In the same commit, bump the package's `version` field AND add a matching `## [X.Y.Z]` block at the top of that package's `CHANGELOG.md`. The release pipeline rejects a tag whose version is not in the changelog.
 - **Releasing:** a tag `dikw-converter-<format>-vX.Y.Z` triggers `.github/workflows/release.yml` (PyPI through OIDC + GitHub Release).
   Before you tag, run `uv run python scripts/check-package.py dikw-converter-<format>`. It runs the same artifact gate (`tests/packaging/`) as CI, so red on your machine means red on the runner.
@@ -87,7 +87,7 @@ dikw client import sample.pdf
 
 ## Finish line
 
-A change is done when `uv run pytest`, `uv run ruff check .`, and `uv run mypy packages/*/src` are green, the PR is merged, and local `main` is synced.
+A change is done when `uv run pytest`, `uv run ruff check .`, and `uv run mypy packages/*/src` are green locally, every PR check is green, the PR is merged, and local `main` is synced.
 A release is done when `scripts/check-package.py` passes, the tag is pushed with my approval, and the release workflow is green.
 
 ## Report
