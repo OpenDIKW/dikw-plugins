@@ -121,7 +121,7 @@ all lives in a sibling repo (rather than inside dikw-core) is in
 ```
 dikw-plugins/
 ├── README.md                 (you are here)
-├── CLAUDE.md                 agent guidance — start with docs/architecture.md
+├── CLAUDE.md                 agent guidance — which doc to read for which change
 ├── CONTEXT.md                local terms (defers to dikw-core's glossary)
 ├── pyproject.toml            uv workspace root
 ├── uv.lock                   committed for reproducible installs
