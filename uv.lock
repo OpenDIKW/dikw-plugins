@@ -345,7 +345,7 @@ dev = [{ name = "pytest-httpx", specifier = ">=0.30" }]
 
 [[package]]
 name = "dikw-core"
-version = "0.6.7"
+version = "0.6.10"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anthropic" },
@@ -362,9 +362,9 @@ dependencies = [
     { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c3/e7/87d94cbcab98e554d27f5a95a4a76452d7b785452e6b57ee570a77faa3ea/dikw_core-0.6.7.tar.gz", hash = "sha256:2ac6a360376747ed3c7d2f34312883d519def36cd1ef96adc7f589bea9ac9f38", size = 2487268, upload-time = "2026-10-02T04:47:51.936Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/88/57/5058d8810ae34e50d40da932dda73ead3a47df5e01cb575ca13d4a2bdcc6/dikw_core-0.6.10.tar.gz", hash = "sha256:2ed349607f8754fb001a0e5367628588de5c44743eb9b7c77fd58bfda915104f", size = 2501672, upload-time = "2026-10-06T04:07:39.601Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/aa/34/79fd217e2a535340bd98053173002413c04df94736079345910247dcddf3/dikw_core-0.6.7-py3-none-any.whl", hash = "sha256:7dc2564ee373f83ff4db0b2190ba371cb94b8f62b7f9e7d86a1d62d2a35f4756", size = 1472426, upload-time = "2026-10-02T04:47:50.113Z" },
+    { url = "https://files.pythonhosted.org/packages/33/c9/629b0743efa37921d2f21127b337726c02324e37efedf4b1901e017d8294/dikw_core-0.6.10-py3-none-any.whl", hash = "sha256:a81a15bacb8ab48d3158772ab10ea68fd6997494f7946710314bd5956a810179", size = 1473781, upload-time = "2026-10-06T04:07:37.887Z" },
 ]
 
 [[package]]
